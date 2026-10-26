@@ -1,0 +1,1362 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ブロックタイルの広さを数えよう！</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts (Kiwi Maru, Zen Maru Gothic) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Kiwi+Maru:wght@500;700&family=Zen+Maru+Gothic:wght@700;900&display=swap" rel="stylesheet">
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body {
+            font-family: 'Zen Maru Gothic', 'Kiwi Maru', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+            background-color: #fffbeb;
+            color: #292524;
+            overflow-x: hidden;
+        }
+
+        /* アニメーション関連 */
+        @keyframes bounce-slow {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+        }
+        .animate-bounce-slow {
+            animation: bounce-slow 2s infinite ease-in-out;
+        }
+
+        @keyframes pop-in {
+            0% { transform: scale(0.8); opacity: 0; }
+            70% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .animate-pop-in {
+            animation: pop-in 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        /* 花丸アニメーション */
+        @keyframes hanamaru-appear {
+            0% { transform: scale(0) rotate(-45deg); opacity: 0; }
+            70% { transform: scale(1.2) rotate(10deg); opacity: 1; }
+            100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        }
+        .animate-hanamaru {
+            animation: hanamaru-appear 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        /* 3D風可愛いボタンのスタイル */
+        .btn-3d {
+            transition: all 0.1s ease;
+            box-shadow: 0 6px 0 rgba(0, 0, 0, 0.15);
+        }
+        .btn-3d:active {
+            transform: translateY(4px);
+            box-shadow: 0 2px 0 rgba(0, 0, 0, 0.15);
+        }
+
+        /* マスのスタイル */
+        .board-container {
+            width: 400px;
+            height: 400px;
+            position: relative;
+            box-sizing: content-box; /* 枠線がマス目を削らないように設定 */
+        }
+
+        .grid-board {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            grid-template-rows: repeat(5, 1fr);
+            width: 100%;
+            height: 100%;
+        }
+
+        /* 5x5のセルサイズ */
+        .cell-size {
+            width: 80px;
+            height: 80px;
+            box-sizing: border-box;
+        }
+
+        /* 紙吹雪の紙片 */
+        .confetti {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            top: -20px;
+            z-index: 50;
+            opacity: 0.9;
+            animation: fall 3s linear forwards;
+        }
+
+        @keyframes fall {
+            to {
+                transform: translateY(105vh) rotate(720deg);
+            }
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex items-center justify-center p-2 sm:p-4 bg-amber-100/60">
+
+    <!-- アプリメインコンテナ -->
+    <div id="app" class="w-full max-w-4xl h-[95vh] max-h-[850px] bg-white rounded-3xl shadow-2xl border-4 border-amber-300 flex flex-col overflow-hidden relative">
+
+        <!-- 0. トップ画面 (Top Screen) -->
+        <div id="screen-top" class="h-full w-full flex flex-col justify-between items-center p-6 bg-gradient-to-b from-amber-50 to-orange-100 relative overflow-hidden">
+            <!-- 設定ボタン（右上） -->
+            <button onclick="openSettingsModal()" class="absolute top-4 right-4 bg-white/80 hover:bg-white text-amber-700 p-3 rounded-2xl shadow-md border-2 border-amber-200 text-xl z-20 flex items-center gap-2">
+                <i class="fa-solid fa-gear"></i>
+                <span class="text-sm font-bold">せってい</span>
+            </button>
+
+            <div class="mt-8 text-center z-10">
+                <div class="inline-block bg-amber-200 text-amber-800 text-sm md:text-base font-extrabold px-4 py-1.5 rounded-full mb-3 shadow-inner">
+                    小学生低学年むけ さんすう教材
+                </div>
+                <h1 class="text-3xl md:text-5xl font-black text-amber-900 tracking-wider mb-2 drop-shadow-sm">
+                    ブロックタイルの<br><span class="text-orange-600 text-4xl md:text-6xl">広さを数えよう！</span>
+                </h1>
+                <p class="text-amber-700 text-base md:text-lg font-bold">どちらがひろいかな？マス目をかぞえてみよう！</p>
+            </div>
+
+            <!-- キャラクターイラスト表示 -->
+            <div class="relative my-2 z-10 flex flex-col items-center">
+                <!-- 吹き出し -->
+                <div class="bg-white border-4 border-amber-400 rounded-3xl px-6 py-3 mb-2 shadow-lg relative animate-bounce-slow max-w-xs text-center">
+                    <p class="text-lg font-black text-amber-900">いっしょに マス目を<br>かぞえるニャ〜！ 🐾</p>
+                    <div class="absolute -bottom-3 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-8 border-l-transparent border-r-8 border-r-transparent border-t-8 border-t-amber-400"></div>
+                </div>
+                <!-- ネコちゃんSVGイラスト -->
+                <div class="w-36 h-36 md:w-44 md:h-44 relative">
+                    <svg viewBox="0 0 200 200" class="w-full h-full drop-shadow-md">
+                        <circle cx="100" cy="110" r="65" fill="#f97316"/>
+                        <path d="M 50 60 L 75 100 L 40 95 Z" fill="#ea580c"/>
+                        <path d="M 150 60 L 125 100 L 160 95 Z" fill="#ea580c"/>
+                        <circle cx="75" cy="105" r="10" fill="#292524"/>
+                        <circle cx="125" cy="105" r="10" fill="#292524"/>
+                        <circle cx="78" cy="102" r="3" fill="#ffffff"/>
+                        <circle cx="128" cy="102" r="3" fill="#ffffff"/>
+                        <ellipse cx="100" cy="120" rx="8" ry="6" fill="#f43f5e"/>
+                        <path d="M 90 128 Q 100 138 110 128" stroke="#292524" stroke-width="3" fill="none" stroke-linecap="round"/>
+                        <circle cx="55" cy="120" rx="10" ry="6" fill="#fda4af" opacity="0.6"/>
+                        <circle cx="145" cy="120" rx="10" ry="6" fill="#fda4af" opacity="0.6"/>
+                    </svg>
+                </div>
+            </div>
+
+            <div class="mb-6 w-full max-w-xs z-10">
+                <button onclick="showLevelSelectScreen()" class="btn-3d w-full bg-orange-500 hover:bg-orange-400 text-white font-black text-2xl md:text-3xl py-4 rounded-3xl border-b-8 border-orange-700 flex items-center justify-center gap-3 shadow-xl">
+                    <i class="fa-solid fa-play"></i>
+                    はじめる！
+                </button>
+            </div>
+        </div>
+
+        <!-- 1. レベル選択画面 (Level Select Screen) -->
+        <div id="screen-start" class="hidden h-full w-full flex flex-col justify-between items-center p-6 bg-amber-50 relative overflow-hidden">
+            <!-- レベル選択画面用 紙吹雪コンテナ -->
+            <div id="level-select-confetti-container" class="absolute inset-0 pointer-events-none z-40 overflow-hidden"></div>
+
+            <!-- 左上トップに戻るボタン -->
+            <button onclick="goToTopScreen()" class="btn-3d absolute top-4 left-4 bg-white hover:bg-slate-50 text-slate-700 border-2 border-slate-300 w-12 h-12 rounded-2xl flex items-center justify-center text-xl shadow-md z-20">
+                <i class="fa-solid fa-house"></i>
+            </button>
+
+            <!-- 右上設定ボタン -->
+            <button onclick="openSettingsModal()" class="btn-3d absolute top-4 right-4 bg-white hover:bg-slate-50 text-amber-700 border-2 border-amber-200 p-3 rounded-2xl flex items-center justify-center text-xl shadow-md z-20">
+                <i class="fa-solid fa-gear"></i>
+            </button>
+
+            <div class="mt-4 text-center">
+                <h2 class="text-2xl md:text-3xl font-black text-amber-900 mb-1">レベルをえらぼう！</h2>
+                <p class="text-amber-700 font-bold text-sm md:text-base">すきなレベルからスタートできるよ！</p>
+            </div>
+
+            <!-- レベルボタンリスト -->
+            <div class="w-full max-w-md space-y-3.5 my-2 z-10">
+                <!-- レベル 1 -->
+                <div class="relative flex items-center">
+                    <button id="btn-lvl-1" onclick="selectLevel(1)" class="btn-3d w-full bg-emerald-500 hover:bg-emerald-400 text-white font-black text-xl md:text-2xl py-3.5 px-6 rounded-2xl border-b-4 border-emerald-700 flex items-center justify-between shadow-md">
+                        <div class="flex items-center gap-3">
+                            <span class="bg-white text-emerald-700 w-9 h-9 rounded-full flex items-center justify-center text-lg font-extrabold shadow-inner">1</span>
+                            <span>レベル 1</span>
+                        </div>
+                        <span class="text-sm font-bold bg-emerald-700/40 px-3 py-1 rounded-full">同じかたちの勝負</span>
+                    </button>
+                    <!-- クリア時の花丸マーク -->
+                    <div id="hanamaru-lvl-1" class="hidden absolute -right-3 -top-3 z-30 pointer-events-none">
+                        <svg class="w-16 h-16 text-rose-500 drop-shadow-md animate-hanamaru" viewBox="0 0 100 100">
+                            <circle cx="50" cy="50" r="38" fill="none" stroke="currentColor" stroke-width="7" stroke-dasharray="6 3" />
+                            <circle cx="50" cy="50" r="28" fill="none" stroke="currentColor" stroke-width="6" />
+                            <path d="M 50 12 C 55 2, 65 2, 65 12 C 65 22, 50 22, 50 12 Z" fill="currentColor" />
+                            <path d="M 88 50 C 98 55, 98 65, 88 65 C 78 65, 78 50, 88 50 Z" fill="currentColor" />
+                            <path d="M 50 88 C 45 98, 35 98, 35 88 C 35 78, 50 78, 50 88 Z" fill="currentColor" />
+                            <path d="M 12 50 C 2 45, 2 35, 12 35 C 22 35, 22 50, 12 50 Z" fill="currentColor" />
+                        </svg>
+                    </div>
+                </div>
+
+                <!-- レベル 2 -->
+                <div class="relative flex items-center">
+                    <button id="btn-lvl-2" onclick="selectLevel(2)" class="btn-3d w-full bg-sky-500 hover:bg-sky-400 text-white font-black text-xl md:text-2xl py-3.5 px-6 rounded-2xl border-b-4 border-sky-700 flex items-center justify-between shadow-md">
+                        <div class="flex items-center gap-3">
+                            <span class="bg-white text-sky-700 w-9 h-9 rounded-full flex items-center justify-center text-lg font-extrabold shadow-inner">2</span>
+                            <span>レベル 2</span>
+                        </div>
+                        <span class="text-sm font-bold bg-sky-700/40 px-3 py-1 rounded-full">かたちがちがう勝負</span>
+                    </button>
+                    <!-- クリア時の花丸マーク -->
+                    <div id="hanamaru-lvl-2" class="hidden absolute -right-3 -top-3 z-30 pointer-events-none">
+                        <svg class="w-16 h-16 text-rose-500 drop-shadow-md animate-hanamaru" viewBox="0 0 100 100">
+                            <circle cx="50" cy="50" r="38" fill="none" stroke="currentColor" stroke-width="7" stroke-dasharray="6 3" />
+                            <circle cx="50" cy="50" r="28" fill="none" stroke="currentColor" stroke-width="6" />
+                            <path d="M 50 12 C 55 2, 65 2, 65 12 C 65 22, 50 22, 50 12 Z" fill="currentColor" />
+                            <path d="M 88 50 C 98 55, 98 65, 88 65 C 78 65, 78 50, 88 50 Z" fill="currentColor" />
+                            <path d="M 50 88 C 45 98, 35 98, 35 88 C 35 78, 50 78, 50 88 Z" fill="currentColor" />
+                            <path d="M 12 50 C 2 45, 2 35, 12 35 C 22 35, 22 50, 12 50 Z" fill="currentColor" />
+                        </svg>
+                    </div>
+                </div>
+
+                <!-- レベル 3 -->
+                <div class="relative flex items-center">
+                    <button id="btn-lvl-3" onclick="selectLevel(3)" class="btn-3d w-full bg-indigo-500 hover:bg-indigo-400 text-white font-black text-xl md:text-2xl py-3.5 px-6 rounded-2xl border-b-4 border-indigo-700 flex items-center justify-between shadow-md">
+                        <div class="flex items-center gap-3">
+                            <span class="bg-white text-indigo-700 w-9 h-9 rounded-full flex items-center justify-center text-lg font-extrabold shadow-inner">3</span>
+                            <span>レベル 3</span>
+                        </div>
+                        <span class="text-sm font-bold bg-indigo-700/40 px-3 py-1 rounded-full">3つの広さの勝負</span>
+                    </button>
+                    <!-- クリア時の花丸マーク -->
+                    <div id="hanamaru-lvl-3" class="hidden absolute -right-3 -top-3 z-30 pointer-events-none">
+                        <svg class="w-16 h-16 text-rose-500 drop-shadow-md animate-hanamaru" viewBox="0 0 100 100">
+                            <circle cx="50" cy="50" r="38" fill="none" stroke="currentColor" stroke-width="7" stroke-dasharray="6 3" />
+                            <circle cx="50" cy="50" r="28" fill="none" stroke="currentColor" stroke-width="6" />
+                            <path d="M 50 12 C 55 2, 65 2, 65 12 C 65 22, 50 22, 50 12 Z" fill="currentColor" />
+                            <path d="M 88 50 C 98 55, 98 65, 88 65 C 78 65, 78 50, 88 50 Z" fill="currentColor" />
+                            <path d="M 50 88 C 45 98, 35 98, 35 88 C 35 78, 50 78, 50 88 Z" fill="currentColor" />
+                            <path d="M 12 50 C 2 45, 2 35, 12 35 C 22 35, 22 50, 12 50 Z" fill="currentColor" />
+                        </svg>
+                    </div>
+                </div>
+
+                <!-- レベル 4 -->
+                <div class="relative flex items-center">
+                    <button id="btn-lvl-4" onclick="selectLevel(4)" class="btn-3d w-full bg-purple-500 hover:bg-purple-400 text-white font-black text-xl md:text-2xl py-3.5 px-6 rounded-2xl border-b-4 border-purple-700 flex items-center justify-between shadow-md">
+                        <div class="flex items-center gap-3">
+                            <span class="bg-white text-purple-700 w-9 h-9 rounded-full flex items-center justify-center text-lg font-extrabold shadow-inner">4</span>
+                            <span>レベル 4</span>
+                        </div>
+                        <span class="text-sm font-bold bg-purple-700/40 px-3 py-1 rounded-full">4つの広さの勝負</span>
+                    </button>
+                    <!-- クリア時の花丸マーク -->
+                    <div id="hanamaru-lvl-4" class="hidden absolute -right-3 -top-3 z-30 pointer-events-none">
+                        <svg class="w-16 h-16 text-rose-500 drop-shadow-md animate-hanamaru" viewBox="0 0 100 100">
+                            <circle cx="50" cy="50" r="38" fill="none" stroke="currentColor" stroke-width="7" stroke-dasharray="6 3" />
+                            <circle cx="50" cy="50" r="28" fill="none" stroke="currentColor" stroke-width="6" />
+                            <path d="M 50 12 C 55 2, 65 2, 65 12 C 65 22, 50 22, 50 12 Z" fill="currentColor" />
+                            <path d="M 88 50 C 98 55, 98 65, 88 65 C 78 65, 78 50, 88 50 Z" fill="currentColor" />
+                            <path d="M 50 88 C 45 98, 35 98, 35 88 C 35 78, 50 78, 50 88 Z" fill="currentColor" />
+                            <path d="M 12 50 C 2 45, 2 35, 12 35 C 22 35, 22 50, 12 50 Z" fill="currentColor" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 下部ネコちゃんアドバイス -->
+            <div class="flex items-center gap-3 bg-white border-2 border-amber-300 rounded-2xl p-3 shadow-md max-w-md w-full">
+                <div class="w-12 h-12 flex-shrink-0">
+                    <svg viewBox="0 0 200 200" class="w-full h-full">
+                        <circle cx="100" cy="110" r="65" fill="#f97316"/>
+                        <circle cx="75" cy="105" r="8" fill="#292524"/>
+                        <circle cx="125" cy="105" r="8" fill="#292524"/>
+                        <circle cx="77" cy="103" r="2.5" fill="#ffffff"/>
+                        <circle cx="127" cy="103" r="2.5" fill="#ffffff"/>
+                        <ellipse cx="100" cy="120" rx="7" ry="5" fill="#f43f5e"/>
+                    </svg>
+                </div>
+                <p id="level-select-cat-speech" class="text-amber-900 font-bold text-sm md:text-base">がんばって チャレンジしようニャ！</p>
+            </div>
+        </div>
+
+        <!-- 2. ゲームプレイ画面 (Game Screen) -->
+        <div id="screen-game" class="hidden h-full w-full flex flex-col justify-between items-center p-3 md:p-5 bg-amber-50/50 relative overflow-hidden">
+            <!-- ヘッダーエリア -->
+            <div class="w-full flex items-center justify-between border-b-2 border-amber-200 pb-2">
+                <button onclick="showLevelSelectScreen()" class="btn-3d bg-white hover:bg-slate-50 text-slate-700 border-2 border-slate-300 px-3 py-1.5 rounded-xl font-extrabold text-sm flex items-center gap-1.5">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    <span>もどる</span>
+                </button>
+
+                <div class="flex items-center gap-2">
+                    <span id="game-level-badge" class="bg-amber-500 text-white font-black text-sm md:text-base px-3 py-1 rounded-full shadow-inner">
+                        レベル 1
+                    </span>
+                    <span id="game-progress" class="bg-white text-amber-900 border-2 border-amber-300 font-black text-sm md:text-base px-3 py-1 rounded-full">
+                        だい 1 もん / 5
+                    </span>
+                </div>
+
+                <button onclick="openSettingsModal()" class="btn-3d bg-white hover:bg-slate-50 text-amber-800 border-2 border-amber-200 p-2 rounded-xl text-base">
+                    <i class="fa-solid fa-gear"></i>
+                </button>
+            </div>
+
+            <!-- 問題文エリア -->
+            <div class="my-1 text-center">
+                <h3 id="question-text" class="text-xl md:text-2xl font-black text-amber-950 tracking-wide">
+                    いちばん ひろい タイルは どれかな？
+                </h3>
+            </div>
+
+            <!-- メイン盤面エリア -->
+            <div class="w-full flex-1 flex items-center justify-center relative my-1">
+                <!-- 5x5 ボードコンテナ -->
+                <div class="board-container bg-white rounded-2xl shadow-xl border-4 border-amber-400 overflow-hidden relative">
+                    <!-- 方眼紙グリッド（背景） -->
+                    <div id="grid-bg" class="grid-board absolute inset-0"></div>
+
+                    <!-- タイル描画用 SVG レイヤー -->
+                    <svg id="tiles-svg" class="absolute inset-0 w-full h-full pointer-events-none z-10"></svg>
+                </div>
+
+                <!-- 正解・不正解オーバーレイフィードバック -->
+                <div id="feedback-overlay" class="hidden absolute inset-0 bg-white/70 backdrop-blur-sm z-30 flex flex-col items-center justify-center animate-pop-in">
+                    <div id="feedback-icon" class="text-8xl mb-2"></div>
+                    <div id="feedback-text" class="text-3xl md:text-4xl font-black text-amber-900"></div>
+                </div>
+            </div>
+
+            <!-- 下部：選択肢ボタン または 順番回答エリア -->
+            <div id="answer-section" class="w-full max-w-xl mb-1">
+                <!-- 選択肢カード（レベル1,2,3,4用） -->
+                <div id="choices-container" class="grid grid-cols-2 gap-3 w-full"></div>
+
+                <!-- レベル3, 4用：順序回答確定ボタン -->
+                <div id="order-submit-container" class="hidden flex flex-col items-center gap-2">
+                    <div class="text-center font-extrabold text-amber-900 text-sm md:text-base">
+                        えらんだ じゅんばん：<span id="selected-order-text" class="text-orange-600 font-black text-lg">まだえらんでないよ</span>
+                    </div>
+                    <div class="flex gap-3 w-full max-w-xs">
+                        <button onclick="resetOrderSelection()" class="btn-3d w-1/3 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2.5 rounded-2xl text-sm">
+                            やりなおす
+                        </button>
+                        <button id="btn-submit-order" onclick="submitOrderAnswer()" class="btn-3d w-2/3 bg-orange-500 hover:bg-orange-400 text-white font-black py-2.5 rounded-2xl text-base border-b-4 border-orange-700 shadow-md">
+                            これで決定！
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. レベルクリア画面 (Clear Screen) -->
+        <div id="screen-clear" class="hidden h-full w-full flex flex-col justify-between items-center p-6 bg-gradient-to-b from-amber-50 via-orange-50 to-amber-100 relative overflow-hidden">
+            <!-- 紙吹雪コンテナ -->
+            <div id="confetti-container" class="absolute inset-0 pointer-events-none z-40 overflow-hidden"></div>
+
+            <div class="mt-4 text-center z-10">
+                <div class="inline-block bg-emerald-100 text-emerald-800 text-base font-extrabold px-6 py-1.5 rounded-full mb-2 shadow-inner">
+                    🎉 レベルクリア！
+                </div>
+                <h2 class="text-4xl md:text-5xl font-black text-amber-900">すごいにゃ〜！</h2>
+            </div>
+
+            <!-- 中央アニメーションイラスト -->
+            <div class="relative my-2 z-10 flex flex-col items-center">
+                <!-- 巨大はなまる -->
+                <div class="w-44 h-44 md:w-52 md:h-52 relative animate-pop-in">
+                    <svg class="w-full h-full text-rose-500 drop-shadow-xl" viewBox="0 0 100 100">
+                        <circle cx="50" cy="50" r="42" fill="none" stroke="currentColor" stroke-width="8" stroke-dasharray="8 4" />
+                        <circle cx="50" cy="50" r="30" fill="none" stroke="currentColor" stroke-width="7" />
+                        <path d="M 50 8 C 58 -3, 70 -3, 70 8 C 70 19, 50 19, 50 8 Z" fill="currentColor" />
+                        <path d="M 92 50 C 103 58, 103 70, 92 70 C 81 70, 81 50, 92 50 Z" fill="currentColor" />
+                        <path d="M 50 92 C 42 103, 30 103, 30 92 C 30 81, 50 81, 50 92 Z" fill="currentColor" />
+                        <path d="M 8 50 C -3 42, -3 30, 8 30 C 19 30, 19 50, 8 50 Z" fill="currentColor" />
+                    </svg>
+                    <!-- ネコちゃん顔アイコン（中央） -->
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <div class="w-20 h-20">
+                            <svg viewBox="0 0 200 200" class="w-full h-full">
+                                <circle cx="100" cy="110" r="65" fill="#f97316"/>
+                                <circle cx="75" cy="105" r="8" fill="#292524"/>
+                                <circle cx="125" cy="105" r="8" fill="#292524"/>
+                                <circle cx="77" cy="103" r="2.5" fill="#ffffff"/>
+                                <circle cx="127" cy="103" r="2.5" fill="#ffffff"/>
+                                <ellipse cx="100" cy="120" rx="7" ry="5" fill="#f43f5e"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <p class="text-amber-800 text-lg md:text-xl font-black z-10 text-center">
+                ぜんぶの もんだいに せいかいしたよ！<br>ひろさを かぞえるのが とても とくいになったね！
+            </p>
+
+            <!-- 操作ボタン -->
+            <div class="mb-6 w-full max-w-sm space-y-3 z-10">
+                <button id="btn-next-level" onclick="nextLevelOrSelect()" class="btn-3d w-full bg-emerald-500 hover:bg-emerald-400 text-white font-black text-2xl py-3.5 rounded-2xl border-b-6 border-emerald-700 shadow-xl flex items-center justify-center gap-2">
+                    <span>つぎのレベルへ！</span>
+                    <i class="fa-solid fa-arrow-right"></i>
+                </button>
+                <button onclick="showLevelSelectScreen()" class="btn-3d w-full bg-white hover:bg-amber-50 text-amber-900 border-2 border-amber-300 font-extrabold text-lg py-3 rounded-2xl shadow-md">
+                    レベル選択にもどる
+                </button>
+            </div>
+        </div>
+
+        <!-- 4. 設定モーダル (Settings Modal) -->
+        <div id="settings-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div class="bg-white rounded-3xl border-4 border-amber-300 w-full max-w-md p-6 shadow-2xl relative animate-pop-in">
+                <button onclick="closeSettingsModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-2xl w-10 h-10 rounded-full flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+
+                <h3 class="text-2xl font-black text-amber-900 mb-6 text-center flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-gear text-amber-500"></i>
+                    せってい
+                </h3>
+
+                <div class="space-y-6">
+                    <!-- 方眼線の表示切替 -->
+                    <div class="flex items-center justify-between border-b pb-4">
+                        <div>
+                            <div class="font-bold text-amber-950 text-base">マス目（ほうがん）の線</div>
+                            <div class="text-xs text-slate-500">マス目をかぞえやすくする線をひく</div>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="setting-grid" class="sr-only peer" checked onchange="toggleGridLines(this.checked)">
+                            <div class="w-14 h-8 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-7 after:w-7 after:transition-all peer-checked:bg-amber-500"></div>
+                        </label>
+                    </div>
+
+                    <!-- ブロックの区切り線の表示切替 -->
+                    <div class="flex items-center justify-between border-b pb-4">
+                        <div>
+                            <div class="font-bold text-amber-950 text-base">ブロックの区切り線</div>
+                            <div class="text-xs text-slate-500">タイルの中の1マスの境界線をだす</div>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="setting-block-border" class="sr-only peer" checked onchange="toggleBlockBorders(this.checked)">
+                            <div class="w-14 h-8 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-7 after:w-7 after:transition-all peer-checked:bg-amber-500"></div>
+                        </label>
+                    </div>
+
+                    <!-- 効果音・音声の切替 -->
+                    <div class="flex items-center justify-between border-b pb-4">
+                        <div>
+                            <div class="font-bold text-amber-950 text-base">おと・おんせい</div>
+                            <div class="text-xs text-slate-500">せいかいの音やネコちゃんの声をならす</div>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="setting-sound" class="sr-only peer" checked onchange="toggleSound(this.checked)">
+                            <div class="w-14 h-8 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-7 after:w-7 after:transition-all peer-checked:bg-amber-500"></div>
+                        </label>
+                    </div>
+
+                    <!-- レベルアンロック機能 -->
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="font-bold text-amber-950 text-base">ぜんぶのレベルをかいほう</div>
+                            <div class="text-xs text-slate-500">クリア前でもすべてのレベルであそべる</div>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="setting-unlock-all" class="sr-only peer" onchange="toggleUnlockAll(this.checked)">
+                            <div class="w-14 h-8 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-7 after:w-7 after:transition-all peer-checked:bg-amber-500"></div>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="mt-8">
+                    <button onclick="closeSettingsModal()" class="btn-3d w-full bg-amber-500 hover:bg-amber-400 text-white font-black py-3 rounded-2xl border-b-4 border-amber-700 shadow-md">
+                        とじる
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- JavaScript ロジック -->
+    <script>
+        // 設定データ
+        const settings = {
+            showGrid: true,
+            showBlockBorder: true,
+            soundEffect: true,
+        };
+
+        let isUnlockAll = false; // 全レベルアンロックフラグ
+        let currentLevel = 1;
+        let currentQuestionIndex = 0;
+        let unlockedLevel = 1;
+        const maxAllowedLevel = 4;
+        let clearedLevels = new Set(); // クリア済みレベルを管理
+
+        // 進行中データ
+        let currentQuestions = [];
+        let selectedOrder = []; // レベル3, 4用の選択順序
+
+        // WEB Audio API
+        let audioCtx = null;
+
+        function initAudio() {
+            if (!audioCtx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (AudioContext) audioCtx = new AudioContext();
+            }
+        }
+
+        // 音声合成（読み上げ）
+        function speakCatSpeech(text) {
+            if (!settings.soundEffect) return;
+            if (!('speechSynthesis' in window)) return;
+
+            window.speechSynthesis.cancel(); // 前の読み上げを停止
+            
+            // 「3つ」を「さんつ」と読まないように「みっつ」へ置き換え
+            let spokenText = text.replace(/3つ/g, 'みっつ');
+
+            const uttr = new SpeechSynthesisUtterance(spokenText);
+            uttr.lang = 'ja-JP';
+            uttr.rate = 1.0;
+            uttr.pitch = 1.3; // ネコちゃんっぽい少し高めの声
+
+            window.speechSynthesis.speak(uttr);
+        }
+
+        // 効果音再生
+        function playSoundTap() {
+            initAudio();
+            if (!audioCtx || !settings.soundEffect) return;
+            try {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(800, audioCtx.currentTime + 0.08);
+                gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.08);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.08);
+            } catch (e) {}
+        }
+
+        function playSoundCorrect() {
+            initAudio();
+            if (!audioCtx || !settings.soundEffect) return;
+            try {
+                const now = audioCtx.currentTime;
+                // ド・ミ・ソ の和音ピンポン音
+                [523.25, 659.25, 783.99].forEach((freq, idx) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+                    gain.gain.setValueAtTime(0.4, now + idx * 0.08);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.3);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now + idx * 0.08);
+                    osc.stop(now + idx * 0.08 + 0.3);
+                });
+            } catch (e) {}
+        }
+
+        function playSoundWrong() {
+            initAudio();
+            if (!audioCtx || !settings.soundEffect) return;
+            try {
+                const now = audioCtx.currentTime;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(220, now);
+                osc.frequency.setValueAtTime(200, now + 0.15);
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.35);
+            } catch (e) {}
+        }
+
+        // ファンファーレ（クリアファンファーレ音楽）
+        function playSoundVictory() {
+            initAudio();
+            if (!audioCtx || !settings.soundEffect) return;
+            try {
+                const now = audioCtx.currentTime;
+                // ド(C5), ミ(E5), ソ(G5), ド(C6) の華やかなファンファーレメロディ
+                const notes = [
+                    { freq: 523.25, duration: 0.15, delay: 0 },
+                    { freq: 523.25, duration: 0.15, delay: 0.15 },
+                    { freq: 523.25, duration: 0.15, delay: 0.30 },
+                    { freq: 659.25, duration: 0.45, delay: 0.45 },
+                    { freq: 783.99, duration: 0.45, delay: 0.90 },
+                    { freq: 1046.50, duration: 0.9, delay: 1.35 }
+                ];
+
+                notes.forEach(note => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(note.freq, now + note.delay);
+                    gain.gain.setValueAtTime(0.35, now + note.delay);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + note.delay + note.duration);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now + note.delay);
+                    osc.stop(now + note.delay + note.duration);
+                });
+            } catch (e) {}
+        }
+
+        // 全レベル全クリア時用の豪華・超派手なクリアファンファーレ
+        function playSoundGrandVictory() {
+            initAudio();
+            if (!audioCtx || !settings.soundEffect) return;
+            try {
+                const now = audioCtx.currentTime;
+                const arpeggio = [
+                    { freq: 523.25, duration: 0.1, delay: 0 },
+                    { freq: 659.25, duration: 0.1, delay: 0.1 },
+                    { freq: 783.99, duration: 0.1, delay: 0.2 },
+                    { freq: 1046.50, duration: 0.15, delay: 0.3 },
+                    { freq: 783.99, duration: 0.1, delay: 0.45 },
+                    { freq: 1046.50, duration: 0.1, delay: 0.55 },
+                    { freq: 1318.51, duration: 0.2, delay: 0.65 },
+                ];
+
+                arpeggio.forEach(note => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(note.freq, now + note.delay);
+                    gain.gain.setValueAtTime(0.4, now + note.delay);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + note.delay + note.duration);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now + note.delay);
+                    osc.stop(now + note.delay + note.duration);
+                });
+
+                const chordNotes = [523.25, 659.25, 783.99, 1046.50, 1318.51, 1567.98];
+                const chordDelay = 0.9;
+                chordNotes.forEach(freq => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, now + chordDelay);
+                    gain.gain.setValueAtTime(0.3, now + chordDelay);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + chordDelay + 1.8);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now + chordDelay);
+                    osc.stop(now + chordDelay + 1.8);
+                });
+            } catch (e) {}
+        }
+
+        // 花吹雪（紙吹雪）アニメーション生成
+        function launchConfetti(targetContainerId = 'confetti-container', count = 60) {
+            const container = document.getElementById(targetContainerId);
+            if (!container) return;
+            container.innerHTML = '';
+
+            const colors = ['#f43f5e', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#facc15'];
+
+            for (let i = 0; i < count; i++) {
+                const piece = document.createElement('div');
+                piece.className = 'confetti';
+                
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                const left = Math.random() * 100;
+                const delay = Math.random() * 1.8;
+                const size = Math.floor(Math.random() * 8) + 8;
+                const isCircle = Math.random() > 0.5;
+
+                piece.style.backgroundColor = color;
+                piece.style.left = `${left}%`;
+                piece.style.animationDelay = `${delay}s`;
+                piece.style.width = `${size}px`;
+                piece.style.height = `${size}px`;
+                if (isCircle) piece.style.borderRadius = '50%';
+
+                container.appendChild(piece);
+            }
+        }
+
+        // 画面遷移ロジック
+        function goToTopScreen() {
+            playSoundTap();
+            document.getElementById('screen-top').classList.remove('hidden');
+            document.getElementById('screen-start').classList.add('hidden');
+            document.getElementById('screen-game').classList.add('hidden');
+            document.getElementById('screen-clear').classList.add('hidden');
+        }
+
+        function showLevelSelectScreen() {
+            playSoundTap();
+            updateLevelButtonsUI();
+            
+            document.getElementById('screen-top').classList.add('hidden');
+            document.getElementById('screen-game').classList.add('hidden');
+            document.getElementById('screen-clear').classList.add('hidden');
+            document.getElementById('screen-start').classList.remove('hidden');
+
+            // 全レベルクリア（レベル1〜4がすべてクリア済み）達成時のお祝い演出
+            if (clearedLevels.size >= maxAllowedLevel) {
+                setTimeout(() => {
+                    const speechText = "ぜんぶクリア！おめでとうニャー！";
+                    const catSpeech = document.getElementById('level-select-cat-speech');
+                    if (catSpeech) catSpeech.textContent = speechText;
+                    
+                    speakCatSpeech(speechText);
+                    playSoundGrandVictory();
+                    launchConfetti('level-select-confetti-container', 100);
+                }, 300);
+            }
+        }
+
+        function updateLevelButtonsUI() {
+            for (let lvl = 1; lvl <= maxAllowedLevel; lvl++) {
+                const btn = document.getElementById(`btn-lvl-${lvl}`);
+                const hanamaru = document.getElementById(`hanamaru-lvl-${lvl}`);
+
+                if (!btn) continue;
+
+                // 花丸の表示
+                if (clearedLevels.has(lvl)) {
+                    if (hanamaru) hanamaru.classList.remove('hidden');
+                } else {
+                    if (hanamaru) hanamaru.classList.add('hidden');
+                }
+
+                // ロック解放状態かどうかの判定
+                const isAvailable = isUnlockAll || lvl <= unlockedLevel || clearedLevels.has(lvl);
+
+                if (isAvailable) {
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-50', 'cursor-not-allowed', 'grayscale');
+                } else {
+                    btn.disabled = true;
+                    btn.classList.add('opacity-50', 'cursor-not-allowed', 'grayscale');
+                }
+            }
+
+            // ネコちゃんの台詞をクリア状況と設定レベルに応じて更新
+            const catSpeech = document.getElementById('level-select-cat-speech');
+            if (catSpeech) {
+                if (clearedLevels.size === maxAllowedLevel) {
+                    catSpeech.textContent = "ぜんぶクリア！おめでとうニャー！";
+                } else if (isUnlockAll) {
+                    catSpeech.textContent = "どのレベルでもあそべるよ！";
+                } else if (unlockedLevel < maxAllowedLevel) {
+                    if (unlockedLevel === 1) {
+                        catSpeech.textContent = "レベル1からスタートだよ！";
+                    } else {
+                        catSpeech.textContent = `つぎはレベル${unlockedLevel}だよ！`;
+                    }
+                } else {
+                    catSpeech.textContent = "おめでとうだニャ〜！！！";
+                }
+            }
+        }
+
+        // 設定モーダル
+        function openSettingsModal() {
+            playSoundTap();
+            document.getElementById('settings-modal').classList.remove('hidden');
+        }
+
+        function closeSettingsModal() {
+            playSoundTap();
+            document.getElementById('settings-modal').classList.add('hidden');
+        }
+
+        function toggleGridLines(checked) {
+            settings.showGrid = checked;
+            renderBoardGrid();
+        }
+
+        function toggleBlockBorders(checked) {
+            settings.showBlockBorder = checked;
+            renderTiles();
+        }
+
+        function toggleSound(checked) {
+            settings.soundEffect = checked;
+        }
+
+        function toggleUnlockAll(checked) {
+            isUnlockAll = checked;
+            updateLevelButtonsUI();
+        }
+
+        // タイル描画関連カラー定数
+        const TILE_COLORS = [
+            { fill: '#f43f5e', border: '#be123c', name: 'あか', bgClass: 'bg-rose-500', textClass: 'text-rose-600' },
+            { fill: '#3b82f6', border: '#1d4ed8', name: 'あお', bgClass: 'bg-blue-500', textClass: 'text-blue-600' },
+            { fill: '#10b981', border: '#047857', name: 'みどり', bgClass: 'bg-emerald-500', textClass: 'text-emerald-600' },
+            { fill: '#f59e0b', border: '#b45309', name: 'きいろ', bgClass: 'bg-amber-500', textClass: 'text-amber-600' },
+            { fill: '#8b5cf6', border: '#6d28d9', name: 'むらさき', bgClass: 'bg-purple-500', textClass: 'text-purple-600' }
+        ];
+
+        // 問題データ生成エンジン
+        function generateQuestionsForLevel(lvl) {
+            const questions = [];
+
+            if (lvl === 1) {
+                // レベル1: 2つの同じ形状（正方形・長方形）でサイズ（マス数）が異なる比較
+                const configs = [
+                    { shape: 'rect', sizeA: [2, 2], sizeB: [3, 2], target: 'max' },
+                    { shape: 'rect', sizeA: [4, 2], sizeB: [2, 2], target: 'min' },
+                    { shape: 'rect', sizeA: [3, 3], sizeB: [2, 3], target: 'max' },
+                    { shape: 'rect', sizeA: [1, 4], sizeB: [1, 2], target: 'min' },
+                    { shape: 'rect', sizeA: [4, 1], sizeB: [2, 1], target: 'max' }
+                ];
+
+                configs.forEach((cfg) => {
+                    const tiles = [
+                        { id: 'A', label: 'ア', cells: makeRectCells(cfg.sizeA[0], cfg.sizeA[1], 0, 0), color: TILE_COLORS[0] },
+                        { id: 'B', label: 'イ', cells: makeRectCells(cfg.sizeB[0], cfg.sizeB[1], 3, 2), color: TILE_COLORS[1] }
+                    ];
+
+                    const countA = tiles[0].cells.length;
+                    const countB = tiles[1].cells.length;
+                    const correctId = cfg.target === 'max' 
+                        ? (countA > countB ? 'A' : 'B')
+                        : (countA < countB ? 'A' : 'B');
+
+                    questions.push({
+                        type: 'compare_2',
+                        target: cfg.target,
+                        prompt: cfg.target === 'max' ? 'いちばん ひろい タイルは どれかな？' : 'いちばん せまい タイルは どれかな？',
+                        tiles: tiles,
+                        correctAnswer: correctId
+                    });
+                });
+            } else if (lvl === 2) {
+                // レベル2: 2つの異なる形状で同じ/異なるマス数
+                const configs = [
+                    { shapeA: 'L', shapeB: 'rect', cellsA: [[0,0],[0,1],[0,2],[1,2]], cellsB: [[3,1],[4,1],[3,2],[4,2]], target: 'max' },
+                    { shapeA: 'T', shapeB: 'line', cellsA: [[0,0],[1,0],[2,0],[1,1]], cellsB: [[4,0],[4,1],[4,2],[4,3],[4,4]], target: 'min' },
+                    { shapeA: 'Z', shapeB: 'L', cellsA: [[0,0],[1,0],[1,1],[2,1]], cellsB: [[3,2],[3,3],[3,4],[4,4]], target: 'same' },
+                    { shapeA: 'rect', shapeB: 'T', cellsA: [[0,1],[0,2],[1,1],[1,2],[2,1],[2,2]], cellsB: [[3,0],[4,0],[4,1],[4,2]], target: 'max' },
+                    { shapeA: 'line', shapeB: 'Z', cellsA: [[0,0],[0,1],[0,2]], cellsB: [[2,2],[3,2],[3,3],[4,3]], target: 'min' }
+                ];
+
+                configs.forEach((cfg) => {
+                    const tiles = [
+                        { id: 'A', label: 'ア', cells: cfg.cellsA, color: TILE_COLORS[0] },
+                        { id: 'B', label: 'イ', cells: cfg.cellsB, color: TILE_COLORS[1] }
+                    ];
+
+                    const countA = tiles[0].cells.length;
+                    const countB = tiles[1].cells.length;
+                    let correctId = 'A';
+                    let promptText = '';
+
+                    if (cfg.target === 'max') {
+                        correctId = countA > countB ? 'A' : 'B';
+                        promptText = 'ひろいほうの タイルは どれかな？';
+                    } else if (cfg.target === 'min') {
+                        correctId = countA < countB ? 'A' : 'B';
+                        promptText = 'せまいほうの タイルは どれかな？';
+                    } else {
+                        correctId = 'SAME';
+                        promptText = 'ふたつの タイルの 広さは どうかな？';
+                    }
+
+                    questions.push({
+                        type: cfg.target === 'same' ? 'compare_same' : 'compare_2',
+                        target: cfg.target,
+                        prompt: promptText,
+                        tiles: tiles,
+                        correctAnswer: correctId
+                    });
+                });
+            } else if (lvl === 3) {
+                // レベル3: 3つのタイルの比較
+                const configs = [
+                    { sizes: [3, 5, 4], target: 'max', prompt: 'いちばん ひろい タイルは どれかな？' },
+                    { sizes: [6, 3, 5], target: 'min', prompt: 'いちばん せまい タイルは どれかな？' },
+                    { sizes: [4, 7, 2], target: 'max', prompt: 'いちばん ひろい タイルは どれかな？' },
+                    { sizes: [5, 2, 4], target: 'min', prompt: 'いちばん せまい タイルは どれかな？' },
+                    { sizes: [3, 6, 4], target: 'order_desc', prompt: 'ひろい じゅんばんに えらぼう！（ひろい ほうから）' }
+                ];
+
+                configs.forEach((cfg) => {
+                    const tiles = [
+                        { id: 'A', label: 'ア', cells: makeCustomCells(cfg.sizes[0], 0, 0), color: TILE_COLORS[0] },
+                        { id: 'B', label: 'イ', cells: makeCustomCells(cfg.sizes[1], 2, 0), color: TILE_COLORS[1] },
+                        { id: 'C', label: 'ウ', cells: makeCustomCells(cfg.sizes[2], 0, 3), color: TILE_COLORS[2] }
+                    ];
+
+                    let correctAnswer = '';
+                    if (cfg.target === 'max') {
+                        const maxVal = Math.max(...cfg.sizes);
+                        correctAnswer = ['A', 'B', 'C'][cfg.sizes.indexOf(maxVal)];
+                    } else if (cfg.target === 'min') {
+                        const minVal = Math.min(...cfg.sizes);
+                        correctAnswer = ['A', 'B', 'C'][cfg.sizes.indexOf(minVal)];
+                    } else if (cfg.target === 'order_desc') {
+                        const indexed = cfg.sizes.map((s, idx) => ({ size: s, id: ['A', 'B', 'C'][idx] }));
+                        indexed.sort((a, b) => b.size - a.size);
+                        correctAnswer = indexed.map(item => item.id).join('');
+                    }
+
+                    questions.push({
+                        type: cfg.target === 'order_desc' ? 'order_3' : 'compare_3',
+                        target: cfg.target,
+                        prompt: cfg.prompt,
+                        tiles: tiles,
+                        correctAnswer: correctAnswer
+                    });
+                });
+            } else if (lvl === 4) {
+                // レベル4: 4つのタイルの比較
+                const configs = [
+                    { sizes: [4, 8, 5, 6], target: 'max', prompt: 'いちばん ひろい タイルは どれかな？' },
+                    { sizes: [7, 3, 5, 9], target: 'min', prompt: 'いちばん せまい タイルは どれかな？' },
+                    { sizes: [5, 6, 8, 3], target: 'max', prompt: 'いちばん ひろい タイルは どれかな？' },
+                    { sizes: [9, 6, 4, 7], target: 'min', prompt: 'いちばん せまい タイルは どれかな？' },
+                    { sizes: [3, 7, 5, 9], target: 'order_desc', prompt: 'ひろい じゅんばんに えらぼう！（ひろい ほうから）' }
+                ];
+
+                configs.forEach((cfg) => {
+                    const tiles = [
+                        { id: 'A', label: 'ア', cells: makeCustomCells(cfg.sizes[0], 0, 0), color: TILE_COLORS[0] },
+                        { id: 'B', label: 'イ', cells: makeCustomCells(cfg.sizes[1], 3, 0), color: TILE_COLORS[1] },
+                        { id: 'C', label: 'ウ', cells: makeCustomCells(cfg.sizes[2], 0, 3), color: TILE_COLORS[2] },
+                        { id: 'D', label: 'エ', cells: makeCustomCells(cfg.sizes[3], 3, 3), color: TILE_COLORS[3] }
+                    ];
+
+                    let correctAnswer = '';
+                    if (cfg.target === 'max') {
+                        const maxVal = Math.max(...cfg.sizes);
+                        correctAnswer = ['A', 'B', 'C', 'D'][cfg.sizes.indexOf(maxVal)];
+                    } else if (cfg.target === 'min') {
+                        const minVal = Math.min(...cfg.sizes);
+                        correctAnswer = ['A', 'B', 'C', 'D'][cfg.sizes.indexOf(minVal)];
+                    } else if (cfg.target === 'order_desc') {
+                        const indexed = cfg.sizes.map((s, idx) => ({ size: s, id: ['A', 'B', 'C', 'D'][idx] }));
+                        indexed.sort((a, b) => b.size - a.size);
+                        correctAnswer = indexed.map(item => item.id).join('');
+                    }
+
+                    questions.push({
+                        type: cfg.target === 'order_desc' ? 'order_4' : 'compare_4',
+                        target: cfg.target,
+                        prompt: cfg.prompt,
+                        tiles: tiles,
+                        correctAnswer: correctAnswer
+                    });
+                });
+            }
+
+            return questions;
+        }
+
+        // セル生成ヘルパー関数
+        function makeRectCells(w, h, offsetX, offsetY) {
+            const cells = [];
+            for (let x = 0; x < w; x++) {
+                for (let y = 0; y < h; y++) {
+                    cells.push([offsetX + x, offsetY + y]);
+                }
+            }
+            return cells;
+        }
+
+        function makeCustomCells(count, startX, startY) {
+            const cells = [];
+            let currX = startX;
+            let currY = startY;
+
+            for (let i = 0; i < count; i++) {
+                cells.push([currX, currY]);
+                if (i % 2 === 0) {
+                    if (currX + 1 < startX + 2) currX++;
+                    else currY++;
+                } else {
+                    if (currY + 1 < startY + 3) currY++;
+                    else currX++;
+                }
+            }
+            return cells;
+        }
+
+        // レベル選択処理
+        function selectLevel(lvl) {
+            playSoundTap();
+            currentLevel = lvl;
+            currentQuestionIndex = 0;
+            currentQuestions = generateQuestionsForLevel(currentLevel);
+
+            document.getElementById('screen-start').classList.add('hidden');
+            document.getElementById('screen-game').classList.remove('hidden');
+
+            document.getElementById('game-level-badge').textContent = `レベル ${currentLevel}`;
+
+            loadQuestion(currentQuestionIndex);
+        }
+
+        // 問題ロード処理
+        function loadQuestion(index) {
+            const q = currentQuestions[index];
+
+            document.getElementById('game-progress').textContent = `だい ${index + 1} もん / 5`;
+            document.getElementById('question-text').textContent = q.prompt;
+
+            // ネコちゃん読み上げ
+            speakCatSpeech(q.prompt);
+
+            renderBoardGrid();
+            renderTiles();
+            renderAnswerSection();
+        }
+
+        // 方眼紙グリッド（5x5）のレンダリング
+        function renderBoardGrid() {
+            const gridContainer = document.getElementById('grid-bg');
+            gridContainer.innerHTML = '';
+
+            for (let row = 0; row < 5; row++) {
+                for (let col = 0; col < 5; col++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell-size border border-amber-200/80 box-border';
+                    if (!settings.showGrid) {
+                        cell.style.borderColor = 'transparent';
+                    }
+                    gridContainer.appendChild(cell);
+                }
+            }
+        }
+
+        // タイル（SVGパス）の描画
+        function renderTiles() {
+            const svg = document.getElementById('tiles-svg');
+            svg.innerHTML = '';
+
+            const q = currentQuestions[currentQuestionIndex];
+            const cellSize = 80; // 400px / 5列 = 80px
+
+            q.tiles.forEach((tile) => {
+                const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+
+                // 1. 各マスの塗りつぶし
+                tile.cells.forEach(([cx, cy]) => {
+                    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                    rect.setAttribute('x', cx * cellSize);
+                    rect.setAttribute('y', cy * cellSize);
+                    rect.setAttribute('width', cellSize);
+                    rect.setAttribute('height', cellSize);
+                    rect.setAttribute('fill', tile.color.fill);
+
+                    if (settings.showBlockBorder) {
+                        rect.setAttribute('stroke', tile.color.border);
+                        rect.setAttribute('stroke-width', '1.5');
+                        rect.setAttribute('stroke-dasharray', '3 3');
+                    }
+                    g.appendChild(rect);
+                });
+
+                // 2. 外枠太線の生成（アウトライン）
+                const outlinePath = generateTileOutline(tile.cells, cellSize);
+                const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                pathEl.setAttribute('d', outlinePath);
+                pathEl.setAttribute('fill', 'none');
+                pathEl.setAttribute('stroke', tile.color.border);
+                pathEl.setAttribute('stroke-width', '4');
+                pathEl.setAttribute('stroke-linejoin', 'round');
+                pathEl.setAttribute('stroke-linecap', 'round');
+                g.appendChild(pathEl);
+
+                // 3. タイル識別ラベル（ア, イ, ウ...）
+                if (tile.cells.length > 0) {
+                    let avgX = 0, avgY = 0;
+                    tile.cells.forEach(([cx, cy]) => { avgX += cx; avgY += cy; });
+                    avgX /= tile.cells.length;
+                    avgY /= tile.cells.length;
+
+                    const textBg = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    textBg.setAttribute('cx', avgX * cellSize + cellSize / 2);
+                    textBg.setAttribute('cy', avgY * cellSize + cellSize / 2);
+                    textBg.setAttribute('r', '18');
+                    textBg.setAttribute('fill', '#ffffff');
+                    textBg.setAttribute('stroke', tile.color.border);
+                    textBg.setAttribute('stroke-width', '3');
+                    g.appendChild(textBg);
+
+                    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    text.setAttribute('x', avgX * cellSize + cellSize / 2);
+                    text.setAttribute('y', avgY * cellSize + cellSize / 2 + 6);
+                    text.setAttribute('text-anchor', 'middle');
+                    text.setAttribute('font-size', '20');
+                    text.setAttribute('font-weight', '900');
+                    text.setAttribute('fill', tile.color.border);
+                    text.textContent = tile.label;
+                    g.appendChild(text);
+                }
+
+                svg.appendChild(g);
+            });
+        }
+
+        // タイルの外枠パス生成アルゴリズム
+        function generateTileOutline(cells, size) {
+            const cellSet = new Set(cells.map(([x, y]) => `${x},${y}`));
+            let d = '';
+
+            cells.forEach(([x, y]) => {
+                const px = x * size;
+                const py = y * size;
+
+                if (!cellSet.has(`${x},${y - 1}`)) d += `M ${px} ${py} L ${px + size} ${py} `;
+                if (!cellSet.has(`${x + 1},${y}`)) d += `M ${px + size} ${py} L ${px + size} ${py + size} `;
+                if (!cellSet.has(`${x},${y + 1}`)) d += `M ${px + size} ${py + size} L ${px} ${py + size} `;
+                if (!cellSet.has(`${x - 1},${y}`)) d += `M ${px} ${py + size} L ${px} ${py} `;
+            });
+
+            return d;
+        }
+
+        // 解答UIエリアの生成
+        function renderAnswerSection() {
+            const q = currentQuestions[currentQuestionIndex];
+            const choicesContainer = document.getElementById('choices-container');
+            const orderContainer = document.getElementById('order-submit-container');
+
+            choicesContainer.innerHTML = '';
+            selectedOrder = [];
+
+            if (q.type.startsWith('order_')) {
+                // 順序選択形式（レベル3, 4の第5問など）
+                choicesContainer.className = `grid grid-cols-${q.tiles.length} gap-2.5 w-full`;
+                orderContainer.classList.remove('hidden');
+                updateOrderUI();
+
+                q.tiles.forEach((tile) => {
+                    const btn = document.createElement('button');
+                    btn.id = `btn-choice-${tile.id}`;
+                    btn.onclick = () => selectOrderTile(tile.id);
+                    btn.className = `btn-3d bg-white border-4 border-slate-200 rounded-2xl py-3 flex flex-col items-center justify-center relative shadow-md`;
+
+                    // 5問目の場合は「〜マス」を付ける
+                    const maskText = `${tile.cells.length}マス`;
+
+                    btn.innerHTML = `
+                        <span class="w-10 h-10 rounded-full ${tile.color.bgClass} text-white font-black text-xl flex items-center justify-center shadow-md mb-1">
+                            ${tile.label}
+                        </span>
+                        <span class="text-xs font-black text-slate-500">${maskText}</span>
+                        <div id="badge-order-${tile.id}" class="hidden absolute -top-2 -right-2 w-7 h-7 bg-orange-500 text-white font-black text-sm rounded-full flex items-center justify-center border-2 border-white shadow"></div>
+                    `;
+                    choicesContainer.appendChild(btn);
+                });
+
+            } else if (q.type === 'compare_same') {
+                // 同じ広さ判定形式（レベル2用）
+                choicesContainer.className = 'grid grid-cols-3 gap-3 w-full';
+                orderContainer.classList.add('hidden');
+
+                const choices = [
+                    { id: 'A', label: 'アが ひろい' },
+                    { id: 'SAME', label: 'おなじ 広さ' },
+                    { id: 'B', label: 'イが ひろい' }
+                ];
+
+                choices.forEach((c) => {
+                    const btn = document.createElement('button');
+                    btn.onclick = () => checkAnswer(c.id);
+                    btn.className = `btn-3d bg-white hover:bg-amber-50 border-3 border-amber-300 text-amber-950 font-black text-base py-4 rounded-2xl shadow-md text-center`;
+                    btn.textContent = c.label;
+                    choicesContainer.appendChild(btn);
+                });
+
+            } else {
+                // 通常の選択肢形式（ア, イ, ウ, エ）
+                choicesContainer.className = `grid grid-cols-${q.tiles.length} gap-3 w-full`;
+                orderContainer.classList.add('hidden');
+
+                q.tiles.forEach((tile) => {
+                    const btn = document.createElement('button');
+                    btn.onclick = () => checkAnswer(tile.id);
+                    btn.className = `btn-3d bg-white hover:bg-amber-50 border-4 border-slate-200 rounded-2xl py-3 flex flex-col items-center justify-center shadow-md`;
+
+                    // 5問目の場合は「〜マス」を付ける
+                    const maskText = (currentQuestionIndex === 4) ? `${tile.cells.length}マス` : `${tile.cells.length} マス`;
+
+                    btn.innerHTML = `
+                        <span class="w-11 h-11 rounded-full ${tile.color.bgClass} text-white font-black text-2xl flex items-center justify-center shadow-md mb-1">
+                            ${tile.label}
+                        </span>
+                        <span class="text-xs font-black text-slate-500">${maskText}</span>
+                    `;
+                    choicesContainer.appendChild(btn);
+                });
+            }
+        }
+
+        // 順序回答用のタイル選択処理
+        function selectOrderTile(tileId) {
+            playSoundTap();
+            const idx = selectedOrder.indexOf(tileId);
+
+            if (idx > -1) {
+                selectedOrder.splice(idx, 1);
+            } else {
+                selectedOrder.push(tileId);
+            }
+
+            updateOrderUI();
+        }
+
+        function resetOrderSelection() {
+            playSoundTap();
+            selectedOrder = [];
+            updateOrderUI();
+        }
+
+        function updateOrderUI() {
+            const q = currentQuestions[currentQuestionIndex];
+            const textEl = document.getElementById('selected-order-text');
+
+            if (selectedOrder.length === 0) {
+                textEl.textContent = 'まだえらんでないよ';
+            } else {
+                const labels = selectedOrder.map(id => {
+                    const t = q.tiles.find(item => item.id === id);
+                    return t ? t.label : id;
+                });
+                textEl.textContent = labels.join(' ➔ ');
+            }
+
+            // バッジ状態の更新
+            q.tiles.forEach(t => {
+                const badge = document.getElementById(`badge-order-${t.id}`);
+                const btn = document.getElementById(`btn-choice-${t.id}`);
+                if (!badge || !btn) return;
+
+                const orderIdx = selectedOrder.indexOf(t.id);
+                if (orderIdx > -1) {
+                    badge.textContent = `${orderIdx + 1}`;
+                    badge.classList.remove('hidden');
+                    btn.classList.add('border-orange-500', 'bg-orange-50');
+                } else {
+                    badge.classList.add('hidden');
+                    btn.classList.remove('border-orange-500', 'bg-orange-50');
+                }
+            });
+        }
+
+        function submitOrderAnswer() {
+            const q = currentQuestions[currentQuestionIndex];
+            if (selectedOrder.length < q.tiles.length) {
+                speakCatSpeech("ぜんぶの タイルを えらんでね！");
+                return;
+            }
+            const userAns = selectedOrder.join('');
+            checkAnswer(userAns);
+        }
+
+        // 回答判定処理
+        function checkAnswer(userAnswer) {
+            const q = currentQuestions[currentQuestionIndex];
+            const isCorrect = (userAnswer === q.correctAnswer);
+
+            const overlay = document.getElementById('feedback-overlay');
+            const iconEl = document.getElementById('feedback-icon');
+            const textEl = document.getElementById('feedback-text');
+
+            overlay.classList.remove('hidden');
+
+            if (isCorrect) {
+                playSoundCorrect();
+                iconEl.textContent = '⭕';
+                
+                // ネコちゃんの褒め言葉バリエーション
+                const compliments = ["すごいにゃ！", "だいせいかい！", "さすがだにゃ！", "そのとおり！"];
+                const randomCatPhrase = compliments[Math.floor(Math.random() * compliments.length)];
+                
+                textEl.textContent = randomCatPhrase;
+                speakCatSpeech(randomCatPhrase);
+
+                // 1.5秒間ネコちゃんの言葉を聞く間を作ってから進む
+                setTimeout(() => {
+                    overlay.classList.add('hidden');
+                    currentQuestionIndex++;
+
+                    if (currentQuestionIndex < currentQuestions.length) {
+                        loadQuestion(currentQuestionIndex);
+                    } else {
+                        showLevelClearScreen();
+                    }
+                }, 1500);
+
+            } else {
+                playSoundWrong();
+                iconEl.textContent = '❌';
+                textEl.textContent = 'ざんねん！もういちど！';
+                speakCatSpeech("ざんねん！もう一度考えてみようニャ！");
+
+                setTimeout(() => {
+                    overlay.classList.add('hidden');
+                }, 1200);
+            }
+        }
+
+        // レベルクリア画面表示
+        function showLevelClearScreen() {
+            // クリア済みレベルとして登録
+            clearedLevels.add(currentLevel);
+
+            if (currentLevel < maxAllowedLevel) {
+                unlockedLevel = Math.max(unlockedLevel, currentLevel + 1);
+            }
+
+            document.getElementById('screen-game').classList.add('hidden');
+            document.getElementById('screen-clear').classList.remove('hidden');
+
+            // レベルクリアファンファーレ音楽と花吹雪の再生
+            playSoundVictory();
+            launchConfetti('confetti-container', 80);
+
+            speakCatSpeech("レベルクリア！おめでとうニャー！");
+
+            const nextBtn = document.getElementById('btn-next-level');
+            if (currentLevel >= maxAllowedLevel) {
+                nextBtn.querySelector('span').textContent = 'レベル選択画面へ！';
+            } else {
+                nextBtn.querySelector('span').textContent = 'つぎのレベルへ！';
+            }
+        }
+
+        function nextLevelOrSelect() {
+            playSoundTap();
+            if (currentLevel < maxAllowedLevel) {
+                selectLevel(currentLevel + 1);
+            } else {
+                showLevelSelectScreen();
+            }
+        }
+
+        // 初期化処理
+        window.addEventListener('DOMContentLoaded', () => {
+            renderBoardGrid();
+        });
+    </script>
+</body>
+</html>
